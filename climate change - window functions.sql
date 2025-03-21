@@ -1,73 +1,63 @@
 -- Preview the data
 SELECT * 
-FROM page_visits
-LIMIT 20;
+FROM state_climate
+LIMIT 10;
 
--- # of distinct campaigns
-SELECT COUNT(DISTINCT utm_campaign)
-FROM page_visits;
+-- How average temperature changes over time in each state
+SELECT state, year, tempf, AVG(tempf) 
+OVER (PARTITION BY state) AS 'running_avg_temp'
+FROM state_climate
+ORDER BY year
+LIMIT 10;
 
--- # of distinct sources
-SELECT COUNT (DISTINCT utm_source)
-FROM page_visits;
+-- Lowest temperatures for each state
+SELECT state, year, tempf,
+FIRST_VALUE(tempf) OVER (PARTITION BY state
+ORDER BY tempf) 
+AS 'lowest_temp'
+FROM state_climate
+LIMIT 10;
 
--- How are they related?
-SELECT DISTINCT utm_campaign, utm_source
-FROM page_visits;
+-- Highest temperatures for each state
+SELECT state, year, tempf,
+LAST_VALUE(tempf) OVER (PARTITION BY state ORDER BY tempf
+RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+AS 'highest_temp'
+FROM state_climate
+LIMIT 10;
 
--- What are the distinct page names
-SELECT DISTINCT page_name
-FROM page_visits;
+-- Temperature change each year in each state
+SELECT state, year, tempf,
+tempf - LAG(tempf, 1, tempf) 
+OVER (PARTITION BY state ORDER BY year) AS 'change_in_temp'
+FROM state_climate
+ORDER BY change_in_temp DESC
+LIMIT 10;
 
--- Display first touches for each campaign
-WITH first_touch AS (
-  SELECT user_id,
-    MIN(timestamp) AS 'first_touch_at'
-  FROM page_visits
-  GROUP BY 1  
-),
-ft_attr AS(
-SELECT
-  ft.user_id, ft.first_touch_at,
-  pv.utm_campaign, pv.utm_source
-FROM first_touch as ft
-JOIN page_visits as pv
-  ON ft.user_id = pv.user_id
-  AND ft.first_touch_at = pv.timestamp
-)
-SELECT
-  ft_attr.utm_campaign,
-  ft_attr.utm_source,
-  COUNT(*)
-FROM ft_attr
-GROUP BY 1, 2
-ORDER BY 3 DESC;  
+-- Rank the coldest temperatures on record
+SELECT state, year, tempf,
+RANK() OVER (ORDER BY tempf)
+AS 'rank'
+FROM state_climate
+LIMIT 10;
 
--- Display last touches for each campaign for visitors who made a purchase
-WITH last_touch AS (
-    SELECT user_id,
-        MAX(timestamp) as last_touch_at
-    FROM page_visits
-    WHERE page_name = '4 - purchase'
-    GROUP BY user_id),
-lt_attr AS (    
-SELECT lt.user_id,
-    lt.last_touch_at,
-    pv.utm_source,
-		pv.utm_campaign
-FROM last_touch lt
-JOIN page_visits pv
-    ON lt.user_id = pv.user_id
-    AND lt.last_touch_at = pv.timestamp)
-SELECT
-  lt_attr.utm_campaign, lt_attr.utm_source,
-  COUNT(*)
-  FROM lt_attr
-  GROUP BY 1,2
-  ORDER BY 3 DESC;
+-- Rank the warmest for each state
+SELECT state, year, tempf,
+RANK() OVER (PARTITION BY state ORDER BY tempf DESC)
+AS warmest_rank
+FROM state_climate
+LIMIT 10;
 
+-- Average yearly temperatures in quartiles by state
+SELECT NTILE(4) OVER (PARTITION BY state ORDER BY tempf)
+AS quartile, year, state, tempf
+FROM state_climate
+LIMIT 10;
 
-;
-
+-- Average yearly temperatures in quintiles
+SELECT NTILE(5) OVER (ORDER BY tempf)
+AS quintile, year, state, tempf
+FROM state_climate
+LIMIT 10;
 
 
